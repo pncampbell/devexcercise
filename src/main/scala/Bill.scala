@@ -11,10 +11,12 @@ import ServiceChargeValues._
 // although description isn't used yet it provides if nothing else a cut and dried mapping to the stated problem domain
 sealed abstract class Item (description: String, val price: BigDecimal) {
   def serviceChargeRate: Int = DefaultRate
+  def cappedCharge: Boolean = false
 }
 
 sealed abstract class Food (description: String, price: BigDecimal, val isHot: Boolean) extends Item(description, price) {
   override def serviceChargeRate: Int = if(isHot) HotFoodRate else FoodRate
+  override def cappedCharge: Boolean = isHot
 }
 
 case object Cola extends Item("Cola", BigDecimal("0.50"))
@@ -25,7 +27,12 @@ case object SteakSandwich extends Food("Steak Sandwich", BigDecimal("4.50"), isH
 case class Bill(items: Seq[Item]) {
 
 
-  def total: BigDecimal = grossTotal + calculatePercent(grossTotal, applicableServiceRate)
+  def total: BigDecimal = {
+    val serviceCharge: BigDecimal = calculatePercent(grossTotal, applicableServiceRate)
+    val cappedServiceCharge: BigDecimal = if(chargeCapApplies && serviceCharge > ServiceChargeCap) ServiceChargeCap else serviceCharge
+
+    grossTotal + cappedServiceCharge
+  }
 
   def grossTotal: BigDecimal = items.map(_.price).fold(BigDecimal(0)){(p1, p2) =>  p1 + p2}
 
@@ -37,5 +44,7 @@ case class Bill(items: Seq[Item]) {
   }
 
   private def calculatePercent(value: BigDecimal, percentage: Int): BigDecimal = value * (percentage / BigDecimal(100))
+
+  private def chargeCapApplies: Boolean = items.exists(_.cappedCharge)
 }
 
